@@ -8,7 +8,7 @@ import matplotlib.image as mpimg
 
 from IPython import embed
 
-VIDEO_DEVS = [0, 1, 2]
+VIDEO_DEVS = [0]#, 1, 2]
 VIDEO_WIDTH = 1280
 VIDEO_HEIGHT = 720
 
@@ -20,6 +20,7 @@ def open_cam_usb(dev, width, height):
     #            'video/x-raw, width=(int){}, height=(int){}, '
     #            'format=(string)RGBA ! '
     #            'nvvidconv ! appsink').format(dev, width, height)
+    print(dev, width, height)
     gst_str = ('v4l2src device=/dev/video{} ! '
                'image/jpeg,widh=(int){},height=(int){},framerate=10/1,'
                'format=(string)RGB ! '
