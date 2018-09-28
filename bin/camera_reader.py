@@ -14,12 +14,13 @@ import time
 
 def get_sig_handler(cap, receiver, sender, context):
     def signal_handler(sig, frame):
-        print('You pressed Ctrl+C!')
+        print("You pressed Ctrl+C!")
         cap.release()
         receiver.close()
         sender.close()
         context.term()
         sys.exit(0)
+
     return signal_handler
 
 
@@ -33,9 +34,14 @@ def open_cam_usb(dev, width, height):
     return cv2.VideoCapture(gst_str, cv2.CAP_GSTREAMER)
 
 
-def send_array(socket, timestamp, A, flags=0, copy=True, track=False):
+def send_array(socket, timestamp, video_device, A, flags=0, copy=True, track=False):
     """send a numpy array with metadata"""
-    md = dict(dtype=str(A.dtype), shape=A.shape, timestamp=timestamp)
+    md = dict(
+        dtype=str(A.dtype),
+        shape=A.shape,
+        timestamp=timestamp,
+        video_device=video_device,
+    )
     socket.send_json(md, flags | zmq.SNDMORE)
     return socket.send(A, flags, copy=copy, track=track)
 

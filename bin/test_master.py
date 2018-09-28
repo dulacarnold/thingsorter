@@ -11,11 +11,16 @@ if len(sys.argv) > 1:
 
 context = zmq.Context()
 socket = context.socket(zmq.PUB)
-socket.bind("tcp://*:%s" % port)
+socket.bind("tcp://localhost:5556")
+
+monitor_socket = context.socket(zmq.PULL)
+monitor_socket.bind("tcp://localhost:5559")
 
 while True:
     time.sleep(1)
     msg = json.dumps({'timestamp': '{}'.format(time.time()),
                       'control': 'RUN'})
     print(msg)
+    mon_msg = monitor_socket.recv_json()
+    print(mon_msg)
     socket.send_string(msg)
