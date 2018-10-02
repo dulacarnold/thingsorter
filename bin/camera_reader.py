@@ -12,12 +12,12 @@ import time
 # from IPython import embed
 
 
-def get_sig_handler(cap, receiver, sender, context):
+def get_sig_handler(cap, master, sink, context):
     def signal_handler(sig, frame):
         print("You pressed Ctrl+C!")
         cap.release()
-        receiver.close()
-        sender.close()
+        master.close()
+        sink.close()
         context.term()
         sys.exit(0)
 
@@ -40,7 +40,7 @@ def send_array(socket, timestamp, video_device, A, flags=0, copy=True, track=Fal
         dtype=str(A.dtype),
         shape=A.shape,
         timestamp=timestamp,
-        video_device=video_device,
+        video_device=int(video_device),
     )
     socket.send_json(md, flags | zmq.SNDMORE)
     return socket.send(A, flags, copy=copy, track=track)
@@ -50,33 +50,32 @@ def main(args, logger):
 
     # Set up the zmq sockets:
     context = zmq.Context()
-    receiver = context.socket(zmq.SUB)
-    receiver.connect(args.master_address)
-    receiver.setsockopt(zmq.SUBSCRIBE, b"")
-    sender = context.socket(zmq.PUSH)
-    sender.connect(args.sink_address)
-    sender.setsockopt(zmq.LINGER, 0)
+    master = context.socket(zmq.SUB)
+    master.connect(args.master_address)
+    master.setsockopt(zmq.SUBSCRIBE, b"")
+
+    sink = context.socket(zmq.PUSH)
+    sink.connect(args.sink_address)
+    sink.setsockopt(zmq.LINGER, 0)
 
     cap = open_cam_usb(args.video_device, args.width, args.height)
-    signal.signal(signal.SIGINT, get_sig_handler(cap, receiver, sender, context))
+    signal.signal(signal.SIGINT, get_sig_handler(cap, master, sink, context))
 
     while True:
         ret, frame = cap.read()
-
         if ret is False:
             logger.error("Missed a frame.")
             break
-
+        logger.debug("Captured frame.")
         try:
-            b_msg = receiver.recv(flags=zmq.NOBLOCK)
-            msg = json.loads(b_msg)
+            msg = master.recv_json(flags=zmq.NOBLOCK)
         except zmq.Again:
             continue
 
         if msg["control"] == "QUIT":
             break
         logger.info("Sending image for timestamp: {}".format(msg["timestamp"]))
-        send_array(sender, msg["timestamp"], frame.copy())
+        send_array(sink, msg["timestamp"], args.video_device, frame.copy())
 
     cap.release()
 
@@ -105,6 +104,10 @@ if __name__ == "__main__":
     numeric_level = getattr(logging, args.log_level.upper())
     if not isinstance(numeric_level, int):
         raise ValueError("Invalid log level: {}".format(args.log_level))
-    logger.setLevel(numeric_level)
+    try:
+        import coloredlogs
+        coloredlogs.install(level=numeric_level)
+    except ImportError:
+        logging.basicConfig(level=numeric_level)
     logger.info("Starting main...")
     main(args, logger)

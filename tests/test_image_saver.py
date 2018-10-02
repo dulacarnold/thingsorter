@@ -6,7 +6,7 @@ class TestImageSaver(object):
     @pytest.fixture
     def image_queue(self):
         def gen_image_queue(max=10):
-            iq = image_saver.FixSizeDefaultStrDict(dict, max=max)
+            iq = image_saver.FixSizeDefaultStrDict(dict, max_len=max)
 
             for el in range(10, 20):
                 for cam in range(3):
@@ -39,7 +39,7 @@ class TestImageSaver(object):
         del iq["10"][1]
         del iq["11"][2]
         assert image_saver.get_oldest_unprocessed(iq) == str(10)
-        iq = image_saver.FixSizeDefaultStrDict(dict, max=10)
+        iq = image_saver.FixSizeDefaultStrDict(dict, max_len=10)
         iq["10"][0] = 10
         assert image_saver.get_oldest_unprocessed(iq) is None
         iq["11"] = {1: 10, 0: 11}
@@ -62,7 +62,7 @@ class TestImageSaver(object):
         for i in range(10, 18):
             del iq[str(i)]
         assert image_saver.get_oldest_unprocessed(iq) is None
-        iq = image_saver.FixSizeDefaultStrDict(dict, max=10)
+        iq = image_saver.FixSizeDefaultStrDict(dict, max_len=10)
         assert image_saver.get_oldest_unprocessed(iq) is None
 
     def test_extract_image_chain(self, image_queue):
@@ -77,7 +77,7 @@ class TestImageSaver(object):
         del iq["11"][2]
         chain = image_saver.extract_image_chain(iq, "10")
         assert chain == [10, 10, 10]
-        iq = image_saver.FixSizeDefaultStrDict(dict, max=10)
+        iq = image_saver.FixSizeDefaultStrDict(dict, max_len=10)
         iq["10"][0] = 10
         assert image_saver.extract_image_chain(iq, "10") is None
         iq["11"] = {1: 10, 0: 11}
@@ -108,11 +108,11 @@ class TestImageSaver(object):
         for i in range(10, 18):
             del iq[str(i)]
         print(iq)
-        assert image_saver.extract_image_chain(iq, "18") == None
+        assert image_saver.extract_image_chain(iq, "18") is None
         ts = image_saver.get_oldest_unprocessed(iq)
         with pytest.raises(ValueError):
-            assert image_saver.extract_image_chain(iq, ts) == None
-        iq = image_saver.FixSizeDefaultStrDict(dict, max=10)
+            assert image_saver.extract_image_chain(iq, ts) is None
+        iq = image_saver.FixSizeDefaultStrDict(dict, max_len=10)
         ts = image_saver.get_oldest_unprocessed(iq)
         with pytest.raises(ValueError):
-            assert image_saver.extract_image_chain(iq, ts) == None
+            assert image_saver.extract_image_chain(iq, ts) is None
