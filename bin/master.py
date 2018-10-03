@@ -23,7 +23,7 @@ QUEUE_LEN = 3
 def main(args, logger):
     active_ts = deque()
     while True:
-        time.sleep(0.5)
+        time.sleep(0.1)
         # Use a string to avoid any chance of FPE
         ts = str(time.time())
         active_ts.appendleft(ts)
