@@ -39,6 +39,8 @@
 #define SPD_MAX 90
 #define SPD_GAIN 0.01F
 
+#define ELEV_DECEL 1000 // Time elevator spends on slow before stop
+
 #define POSE_OFFSET 30L // Minimum pose offset
 #define POS_TO_ANGLE 0.342 // = 360/1051
 
@@ -54,13 +56,16 @@
 #define SRV2_PWM 7
 #define SRV3_PWM 8
 
+// Elevator control pins
+#define ELEV_SLOW 23
+#define ELEV_FAST 24
+
 // Absolute position sensors on servos, camera servos first and then
 // sort servos.
 #define POS0_INT 18
 #define POS1_INT 2
 #define POS2_INT 3
-#define POS3_INT 19 // Not used
-
+#define ELEV_INT 19
 
 #define POS0_VAL (PIND & (1<<PD3))
 #define POS1_VAL (PINE & (1<<PE4))
@@ -72,6 +77,8 @@
 // PWMServo servos [NUM_SERVOS];
 Adafruit_TiCoServo servos [NUM_SERVOS];
 
+enum class ElevState {stopped, slow, fast, fast_auto, slow_auto};
+
 bool did_move = true;
 bool stopped = true; // Whether all motors are stopped
 uint8_t num_avgs = 0;
@@ -82,11 +89,14 @@ uint16_t tmp_positions [NUM_SERVOS] = {};
 uint16_t positions [NUM_SERVOS] = {};
 volatile long time_deltas [NUM_SERVOS] = {};
 volatile long counters [NUM_SERVOS] = {};
+volatile bool elevTriggered = false;
 
 unsigned long msgs_ts[NUM_MSGS] = {}; // Message send timestamps
+unsigned long elev_ts = 0;
 String input_string = "";         // A String to hold incoming data
 bool string_complete = false;  // Whether the string is complete
 
+ElevState curElevState = ElevState::stopped;
 
 void serialEvent() {
   while (Serial.available()) {
@@ -120,6 +130,10 @@ void IntSrv2() {
   } else {
     time_deltas[2] = micros() - counters[2];
   }
+}
+
+void IntElev() {
+  elevTriggered = true;
 }
 
 // Return an always-positive modulo
@@ -211,6 +225,7 @@ void SetSort(uint8_t label) {
   }
 }
 
+
 void SetPos(uint16_t angle) {
   // Serial.print("SetPos: ");
   // Serial.println(angle);
@@ -221,6 +236,29 @@ void SetPos(uint16_t angle) {
   did_move = true;
 }
 
+
+void SetElevatorSpeed(uint8_t speed) {
+  switch(speed) {
+    case 0: {
+      digitalWrite(ELEV_SLOW, 1);
+      digitalWrite(ELEV_FAST, 1);
+      curElevState = ElevState::stopped;
+      break;
+    }
+    case 1: {
+      digitalWrite(ELEV_SLOW, 0);
+      digitalWrite(ELEV_FAST, 1);
+      curElevState = ElevState::slow;
+      break;
+    }
+    case 2: {
+      digitalWrite(ELEV_SLOW, 1);
+      digitalWrite(ELEV_FAST, 0);
+      curElevState = ElevState::fast;
+      break;
+    }
+  }
+}
 
 
 void setup() {
@@ -240,10 +278,20 @@ void setup() {
   pinMode(POS1_INT, INPUT);
   pinMode(POS2_INT, INPUT);
 
+  // Interrupt for elevator arrival
+  pinMode(ELEV_INT, INPUT);
+
+  // Outputs for elevator control
+  digitalWrite(ELEV_SLOW, 1);
+  digitalWrite(ELEV_FAST, 1);
+  pinMode(ELEV_SLOW, OUTPUT);
+  pinMode(ELEV_FAST, OUTPUT);
+
   // Attach interrupts
   attachInterrupt(digitalPinToInterrupt(POS0_INT), IntSrv0, CHANGE);
   attachInterrupt(digitalPinToInterrupt(POS1_INT), IntSrv1, CHANGE);
   attachInterrupt(digitalPinToInterrupt(POS2_INT), IntSrv2, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ELEV_INT), IntElev, RISING);
 
   // Initialize servo positions
   SetSpeed(0, 0, 0);
@@ -256,12 +304,17 @@ void setup() {
 void loop() {
   int i = 0;
   uint16_t angle = 0;
+  uint8_t label = 0;
+  uint8_t speed = 0;
 
+  // Update the local variables from the volatile memory
   noInterrupts();
   for (; i < NUM_POS_SERVOS; i++) {
     tmp_positions[i] += max(0, time_deltas[i] - POSE_OFFSET);
   }
   interrupts();
+
+  // Average the values to avoid spikes, reading therefore have a slight delay
   num_avgs++;
   if (num_avgs == NUM_AVGS) {
     for (int i=0; i<NUM_POS_SERVOS; i++) {
@@ -279,45 +332,91 @@ void loop() {
         angle = input_string.substring(1).toInt();
         angle = max(0, min(360, angle));
         SetPos(angle);
+        Serial.print("G ");
+        Serial.println(angle);
         break;
       case 'S':
-        angle = input_string.substring(1).toInt();
-        angle = max(0, min(360, angle));
-        SetSort(angle);
+        label = input_string.substring(1).toInt();
+        label = max(0, min(360, label));
+        SetSort(label);
+        Serial.print("S ");
+        Serial.println(label);
         break;
+      case 'E':
+        speed = input_string.substring(1).toInt();
+        speed = max(0, min(2, speed));
+        SetElevatorSpeed(speed);
+        Serial.print("E ");
+        Serial.println(speed);
+        break;
+      // Automatic mode for elevator
+      case 'A':
+        SetElevatorSpeed(2);
+        curElevState = ElevState::fast_auto;
+        Serial.println("A");
+        break;
+
     }
     input_string = String("");
     string_complete = false;
   }
 
-  // For debug:
-  // SetSpeed(1, 0, 1);
   // Update speeds for P-controlled servos
   for(int i=0; i<NUM_POS_SERVOS; i++) {
     UpdateSpeed(i, positions[i], targets[i]);
   }
 
+  // Run state machine
+  switch (curElevState) {
+    case ElevState::fast_auto :{
+      if (elevTriggered) {
+        SetElevatorSpeed(1);
+        curElevState = ElevState::slow_auto;
+        elevTriggered = false;
+        elev_ts = millis();
+      }
+      break;
+    }
+
+    case ElevState::slow_auto :{
+      if (millis() - elev_ts > ELEV_DECEL) {
+        SetElevatorSpeed(0);
+      }
+      break;
+    }
+
+    default: break;
+  }
+
+  // Occasional status messages
   if (millis() - msgs_ts[MSG_STATUS] > MSG_STAT_FREQ) {
     Serial.print("STAT|");
     for(int i=0; i<NUM_POS_SERVOS; i++) {
-
       Serial.print(positions[i]);
       Serial.print("_");
       Serial.print(targets[i]);
       Serial.print(";");
     }
+
+    Serial.print("E_");
+    switch(curElevState) {
+      case ElevState::fast: Serial.print("F"); break;
+      case ElevState::slow: Serial.print("L"); break;
+      case ElevState::stopped: Serial.print("S"); break;
+      case ElevState::slow_auto: Serial.print("LA"); break;
+      case ElevState::fast_auto: Serial.print("FA"); break;
+    }
     Serial.println("");
     msgs_ts[MSG_STATUS] = millis();
   }
-
 
   // Announce servo arrival
   stopped = true;
   for (int i=0; i < NUM_POS_SERVOS; i++) {
     stopped &= (speeds[i] == 0);
   }
-  if (stopped && did_move) {//(millis() - msgs_ts[MSG_STOP] > MSG_STOP_FREQ)) {
-    Serial.print("A:");
+  if (stopped && did_move) {
+    Serial.print("SA:");
     for(int i=0; i<NUM_POS_SERVOS; i++) {
       Serial.print(positions[i]);
       Serial.print(";");
