@@ -96,7 +96,7 @@ unsigned long elev_ts = 0;
 String input_string = "";         // A String to hold incoming data
 bool string_complete = false;  // Whether the string is complete
 
-ElevState curElevState = ElevState::stopped;
+volatile ElevState curElevState = ElevState::stopped;
 
 void serialEvent() {
   while (Serial.available()) {
@@ -133,7 +133,9 @@ void IntSrv2() {
 }
 
 void IntElev() {
-  elevTriggered = true;
+  if (curElevState == ElevState::fast_auto) {
+    elevTriggered = true;
+  }
 }
 
 // Return an always-positive modulo
@@ -215,12 +217,14 @@ void UpdateSpeed(uint8_t s_id, uint16_t pos, uint16_t target) {
 void SetSort(uint8_t label) {
   Serial.print("SetSort: ");
   Serial.println(label);
-  for (int i=NUM_SORT_SERVOS; i < NUM_SERVOS; i++) {
-    // 0 <= i < NUM_SORT_SERVOS
-    if (i == label - NUM_SORT_SERVOS) {
-      SetAngle(i, SORT_OPEN_ANGLE);
+  for (int i=0; i < NUM_SORT_SERVOS; i++) {
+    if (i == label) {
+      Serial.println(i + NUM_POS_SERVOS);
+      SetAngle(i + NUM_POS_SERVOS, SORT_OPEN_ANGLE);
     } else {
-      SetAngle(i, SORT_CLOSED_ANGLE);
+      Serial.print("C");
+      Serial.println(i + NUM_POS_SERVOS);
+      SetAngle(i + NUM_POS_SERVOS, SORT_CLOSED_ANGLE);
     }
   }
 }
@@ -291,7 +295,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(POS0_INT), IntSrv0, CHANGE);
   attachInterrupt(digitalPinToInterrupt(POS1_INT), IntSrv1, CHANGE);
   attachInterrupt(digitalPinToInterrupt(POS2_INT), IntSrv2, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(ELEV_INT), IntElev, RISING);
+  attachInterrupt(digitalPinToInterrupt(ELEV_INT), IntElev, FALLING);
 
   // Initialize servo positions
   SetSpeed(0, 0, 0);
