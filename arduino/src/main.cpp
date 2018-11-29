@@ -1,20 +1,3 @@
-
-// Sweep
-// by BARRAGAN <http://barraganstudio.com>
-
-// http://arduiniana.org/libraries/pwmservo/
-
-//   Board                     SERVO_PIN_A   SERVO_PIN_B   SERVO_PIN_C
-//   -----                     -----------   -----------   -----------
-//   Arduino Uno, Duemilanove       9            10          (none)
-//   Arduino Mega                  11            12            13
-//   Sanguino                      13            12          (none)
-//   Teensy 1.0                    17            18            15
-//   Teensy 2.0                    14            15             4
-//   Teensy++ 1.0 or 2.0           25            26            27
-//   Teensy LC & 3.x                 (all PWM pins are usable)
-
-// #include <PWMServo.h>
 #include <Adafruit_TiCoServo.h>
 #include <Arduino.h>
 
@@ -24,18 +7,18 @@
 #define NUM_SERVOS NUM_POS_SERVOS + NUM_SORT_SERVOS
 
 #define SORT_OPEN_ANGLE 0
-#define SORT_CLOSED_ANGLE 70
+#define SORT_CLOSED_ANGLE 65
 
 #define SRV_POS_MIN 1280 // 1200
 #define SRV_POS_MAX 1720 // 1800
 #define SRV_ANG_MIN 1000 // For the orientation servo
 #define SRV_ANG_MAX 2000
-#define SRV_DIR 1
+#define SRV_DIR 1 // Which direction is positive angle movement
 #define SRV_CNTR 90
-#define SRV_STOP_DIST 3
-#define SRV_SLOW_DIST 12
-#define SPD_SLOW 15
-#define SPD_FAST 70
+#define SRV_STOP_DIST 2
+#define SRV_SLOW_DIST 10
+#define SPD_SLOW 30
+#define SPD_FAST 80
 #define SPD_MAX 90
 #define SPD_GAIN 0.01F
 
