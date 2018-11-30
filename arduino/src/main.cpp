@@ -15,12 +15,12 @@
 #define SRV_ANG_MAX 2000
 #define SRV_DIR 1 // Which direction is positive angle movement
 #define SRV_CNTR 90
-#define SRV_STOP_DIST 2
-#define SRV_SLOW_DIST 10
+#define SRV_STOP_DIST 3
+#define SRV_SLOW_DIST 8
 #define SPD_SLOW 30
 #define SPD_FAST 80
 #define SPD_MAX 90
-#define SPD_GAIN 0.01F
+#define SPD_GAIN 0.03F
 
 #define ELEV_DECEL 1000 // Time elevator spends on slow before stop
 
