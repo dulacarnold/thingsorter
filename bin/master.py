@@ -9,6 +9,8 @@ import logging
 from collections import deque
 from IPython import embed
 
+from sort_lib import HardwareInterface
+
 context = zmq.Context()
 socket = context.socket(zmq.PUB)
 socket.bind("tcp://*:5556")
@@ -22,6 +24,8 @@ QUEUE_LEN = 3
 
 def main(args, logger):
     active_ts = deque()
+    hwi = HardwareInterface()
+    hwi.start()
     while True:
         time.sleep(0.1)
         # Use a string to avoid any chance of FPE
@@ -70,10 +74,17 @@ def main(args, logger):
                 "Advancing empty element, queue len: {}".format(len(active_ts))
             )
             label = "UNK"
-        # Command the sorting mechanism with the given class
-        logging.info("Sending to {} output.".format(label))
-        # Advance the sorting line and activate elevator
-        logging.info("Adavancing line and activating elevator.")
+        # Command the sorting mechanism with the given class and advance the line
+        logging.info("Setting sort to {} and advancing line.".format(label))
+        hwi.sort_and_advance(label)
+        while not hwi.servos_arrived:
+            time.sleep(0.05)
+        # Activate elevator
+        logging.info("Activating elevator.")
+        hwi.sorter_ready = True
+        while not hwi.elevator_arrived:
+            time.sleep(0.05)
+        time.sleep(0.25)  # Make sure everything is stabilized
 
 
 def parse_args():
