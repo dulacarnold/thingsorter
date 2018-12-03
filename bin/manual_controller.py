@@ -1,4 +1,5 @@
-from sort_lib import HardwareInterface
+#!/usr/bin/env python3
+from sortlib import HardwareInterface
 # import sys
 import logging
 import time
