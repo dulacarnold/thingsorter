@@ -62,7 +62,8 @@ Adafruit_TiCoServo servos [NUM_SERVOS];
 
 enum class ElevState {stopped, slow, fast, fast_auto, slow_auto};
 
-bool did_move = true;
+bool sorter_ready = false; // Whethere the sorting mechanism is ready
+bool did_move = true; // Whether a move was requested
 bool stopped = true; // Whether all motors are stopped
 uint8_t num_avgs = 0;
 
@@ -73,19 +74,23 @@ uint16_t positions [NUM_SERVOS] = {};
 volatile long time_deltas [NUM_SERVOS] = {};
 volatile long counters [NUM_SERVOS] = {};
 volatile bool elev_triggered = false;
+String input_string_buffer = String(""); // A String to hold incoming data
+volatile bool string_complete = false;  // Whether the string is complete
 
+String input_string = String("");
 unsigned long msgs_ts[NUM_MSGS] = {}; // Message send timestamps
 unsigned long elev_ts = 0;
-String input_string = "";         // A String to hold incoming data
-bool string_complete = false;  // Whether the string is complete
 
 volatile ElevState curElevState = ElevState::stopped;
 
 void serialEvent() {
   while (Serial.available()) {
+    if (string_complete) {
+      break;
+    }
     char in_char = (char)Serial.read();
-    input_string += in_char;
-    if (in_char == '\n') {
+    input_string_buffer += in_char;
+    if(in_char == '\n') {
       string_complete = true;
     }
   }
@@ -198,15 +203,13 @@ void UpdateSpeed(uint8_t s_id, uint16_t pos, uint16_t target) {
 
 
 void SetSort(uint8_t label) {
-  Serial.print("SetSort: ");
-  Serial.println(label);
   for (int i=0; i < NUM_SORT_SERVOS; i++) {
     if (i == label) {
-      Serial.println(i + NUM_POS_SERVOS);
+      // Serial.println(i + NUM_POS_SERVOS);
       SetAngle(i + NUM_POS_SERVOS, SORT_OPEN_ANGLE);
     } else {
-      Serial.print("C");
-      Serial.println(i + NUM_POS_SERVOS);
+      // Serial.print("C");
+      // Serial.println(i + NUM_POS_SERVOS);
       SetAngle(i + NUM_POS_SERVOS, SORT_CLOSED_ANGLE);
     }
   }
@@ -224,7 +227,7 @@ void SetPosAll(uint16_t angle) {
 }
 
 void SetPos(uint16_t angle, uint8_t motor_id) {
-  targets[i] = angle;
+  targets[motor_id] = angle;
   did_move = true;
 }
 
@@ -294,7 +297,7 @@ void setup() {
 
 
 void loop() {
-  int i = 0;
+  // int i = 0;
   uint16_t angle = 0;
   uint8_t motor_id = 0;
   uint8_t label = 0;
@@ -302,7 +305,7 @@ void loop() {
 
   // Update the local variables from the volatile memory
   noInterrupts();
-  for (; i < NUM_POS_SERVOS; i++) {
+  for (int i = 0; i < NUM_POS_SERVOS; i++) {
     tmp_positions[i] += max(0, time_deltas[i] - POSE_OFFSET);
   }
   interrupts();
@@ -320,6 +323,13 @@ void loop() {
 
   // Manage serial command interface
   if (string_complete) {
+    noInterrupts();
+    input_string = String(input_string_buffer.c_str());
+    input_string_buffer = String("");
+    string_complete = false;
+    // Serial.print("RECV: ");
+    // Serial.println(input_string);
+    interrupts();
     switch(input_string[0]) {
       case 'G':
         if (input_string[1] == ' ') {
@@ -333,7 +343,7 @@ void loop() {
           motor_id = input_string.substring(1,2).toInt();
           angle = max(0, min(360, angle));
           SetPos(angle, motor_id);
-          Serial.println("G" + motor_id + " " + angle);
+          Serial.println(String("G") + motor_id + String(" ") + angle);
         }
         break;
       case 'S':
@@ -358,10 +368,9 @@ void loop() {
         break;
      case 'R':
         sorter_ready = true;
+        Serial.println("R");
         break;
     }
-    input_string = String("");
-    string_complete = false;
   }
 
   // Update speeds for P-controlled servos
@@ -369,21 +378,24 @@ void loop() {
     UpdateSpeed(i, positions[i], targets[i]);
   }
 
+  if (elev_triggered) {
+    Serial.println("ET");
+  }
   // Run state machine
   switch (curElevState) {
     case ElevState::fast_auto :
       if (elev_triggered) {
-        if(!sorter_ready) {
+        // If the sorter is ready anyways, carry on and wipe the flag.
+        if(sorter_ready) {
           sorter_ready = false;
+        // Otherwise slow down the line and prepare to stop.
         } else {
           SetElevatorSpeed(1);
           curElevState = ElevState::slow_auto;
           elev_ts = millis();
         }
-        elev_triggered = false;
       }
       break;
-    }
 
     case ElevState::slow_auto :{
       if (millis() - elev_ts > ELEV_DECEL) {
@@ -394,18 +406,20 @@ void loop() {
 
     default: break;
   }
+  elev_triggered = false;
 
   // Occasional status messages
   if (millis() - msgs_ts[MSG_STATUS] > MSG_STAT_FREQ) {
-    Serial.print("STAT|");
+    Serial.print("STAT:");
     for(int i=0; i<NUM_POS_SERVOS; i++) {
       Serial.print(positions[i]);
       Serial.print("_");
       Serial.print(targets[i]);
       Serial.print(";");
     }
+    Serial.println("");
 
-    Serial.print("E_");
+    Serial.print("ELEV:");
     switch(curElevState) {
       case ElevState::fast: Serial.print("F"); break;
       case ElevState::slow: Serial.print("L"); break;
