@@ -16,7 +16,8 @@ class HardwareInterface:
     NUM_POS = 4
 
     def __init__(self, port="/dev/ttyACM0", baudrate="38400"):
-        self.ser = serial.Serial(port, baudrate, timeout=0)
+        self.port = port
+        self.baudrate = baudrate
         self._cur_pos = 0
         self._sorter_ready = Value(c_bool, False)
         self._elevator_arrived = Value(c_bool, False)
@@ -51,42 +52,59 @@ class HardwareInterface:
         """
         Token variable, gets set to false once consumed.
         """
-        if self._sorter_ready:
-            self._sorter_ready = False
+        if self._sorter_ready.value:
+            self.sorter_ready = False
             return True
         else:
             return False
 
     @sorter_ready.setter
     def sorter_ready(self, value):
-        self._sorter_ready = value
+        self._sorter_ready.value = value
 
     @property
     def elevator_arrived(self):
         """
         Token variable, gets set to false once consumed.
         """
-        if self._elevator_arrived:
-            self._elevator_arrived = False
+        if self._elevator_arrived.value:
+            self.elevator_arrived = False
             return True
         else:
             return False
 
+    @elevator_arrived.setter
+    def elevator_arrived(self, value):
+        self._elevator_arrived.value = value
+
     @property
     def servos_arrived(self):
-        return self._servos_arrived
+        if self._servos_arrived.value:
+            self.servos_arrived = False
+            return True
+        else:
+            return False
+
+    @servos_arrived.setter
+    def servos_arrived(self, value):
+        self._servos_arrived.value = value
 
     @property
     def motor_positions(self):
         return tuple(self._motor_positions)
 
     def start(self):
+        self.ser = serial.Serial(self.port, self.baudrate, timeout=0)
         self._p = Process(target=self._run)
         self._p.start()
 
     def stop(self):
         self._p.terminate()
         self._p.join()
+        self.ser.close()
+
+    def __del__(self):
+        self.stop()
 
     def _run(self):
         ser = self.ser
@@ -102,15 +120,15 @@ class HardwareInterface:
             if b"\n" in b_line:
                 self._logger.debug("Received: {}".format(b_line))
                 line = b_line.decode("ascii")
-                self._logger.debug("Decoded: {}".format(line))
+                # self._logger.debug("Decoded: {}".format(line))
                 if "SA" in line[0:3]:
-                    self._servos_arrived = True
+                    self.servos_arrived = True
                     els = line.split(":")[1].split(";")
                     for idx, m in enumerate(self._motor_positions):
                         self._motor_positions[idx] = int(els[idx])
 
                 if "ET" in line[0:3]:
-                    self._elevator_arrived = True
+                    self.elevator_arrived = True
 
                 if "ST" in line[0:3]:
                     els = line.split(":")[1].split(";")

@@ -53,7 +53,7 @@
 #define POS0_VAL (PIND & (1<<PD3))
 #define POS1_VAL (PINE & (1<<PE4))
 #define POS2_VAL (PINE & (1<<PE5))
-#define POS3_VAL (PIND & (1<<PD2))
+// #define POS3_VAL (PIND & (1<<PD2))
 #define NUM_AVGS 5
 
 // First NUM_CAM_SERVOS are camera servos, and the following
@@ -121,9 +121,9 @@ void IntSrv2() {
 }
 
 void IntElev() {
-  if (curElevState == ElevState::fast_auto) {
     elev_triggered = true;
-  }
+    Serial.println("TRIG");
+  // }
 }
 
 // Return an always-positive modulo
@@ -141,11 +141,6 @@ int16_t AngularDistance(uint16_t a, uint16_t b) {
 // speed is 0-SPD_MAX, direction is -1,0,1 (0 will stop)
 void SetSpeed(uint8_t s_id, uint8_t speed, int8_t direction) {
   speed = min(SPD_MAX, speed);
-  // Serial.print("Speed set: ");
-  // Serial.print(speed * direction + SRV_CNTR);
-  // Serial.print(";");
-  // Serial.print(direction);
-  // Serial.println(".");
   servos[s_id].write(direction * speed + SRV_CNTR);
   speeds[s_id] = direction * speed;
 }
@@ -163,15 +158,7 @@ void UpdateSpeed(uint8_t s_id, uint16_t pos, uint16_t target) {
   int16_t dist = AngularDistance(target, pos);
   uint8_t speed = 0;
   uint8_t dir = 0;
-  // Serial.print("s_id, dist: ");
-  // Serial.print(s_id);
-  // Serial.print(" ");
-  // Serial.print(target);
-  // Serial.print(" ");
-  // Serial.print(pos);
-  // Serial.print(" ");
-  // Serial.println(dist);
-  // if (SRV_DIR == -1) {
+
   if (abs(dist) < SRV_STOP_DIST) {
     speed = 0;
     dir = 0;
@@ -187,29 +174,16 @@ void UpdateSpeed(uint8_t s_id, uint16_t pos, uint16_t target) {
       dir = -1 * SRV_DIR;
     }
   }
-  SetSpeed(s_id, speed, dir);
 
-    // } else if (dist < SRV_SLOW_DIST && dist > 0) {
-    //   SetSpeed(s_id, SPD_SLOW, SRV_DIR);
-    // }
-  // } else {
-  //   if (dist >= 0 && speeds[s_id] == SPD_SLOW) {
-  //     SetSpeed(s_id, 0, 0);
-  //   } else if (dist > -1 * SRV_SLOW_DIST && dist < 0) {
-  //     SetSpeed(s_id, SPD_SLOW, SRV_DIR);
-  //   }
-  // }
+  SetSpeed(s_id, speed, dir);
 }
 
 
 void SetSort(uint8_t label) {
   for (int i=0; i < NUM_SORT_SERVOS; i++) {
     if (i == label) {
-      // Serial.println(i + NUM_POS_SERVOS);
       SetAngle(i + NUM_POS_SERVOS, SORT_OPEN_ANGLE);
     } else {
-      // Serial.print("C");
-      // Serial.println(i + NUM_POS_SERVOS);
       SetAngle(i + NUM_POS_SERVOS, SORT_CLOSED_ANGLE);
     }
   }
@@ -217,14 +191,12 @@ void SetSort(uint8_t label) {
 
 
 void SetPosAll(uint16_t angle) {
-  // Serial.print("SetPos: ");
-  // Serial.println(angle);
   for (int i=0; i < NUM_POS_SERVOS; i++) {
     targets[i] = angle;
-    // SetSpeed(i, SPD_FAST, SRV_DIR);
   }
   did_move = true;
 }
+
 
 void SetPos(uint16_t angle, uint8_t motor_id) {
   targets[motor_id] = angle;
@@ -274,7 +246,7 @@ void setup() {
   pinMode(POS2_INT, INPUT);
 
   // Interrupt for elevator arrival
-  pinMode(ELEV_INT, INPUT);
+  pinMode(ELEV_INT, INPUT_PULLUP);
 
   // Outputs for elevator control
   digitalWrite(ELEV_SLOW, 1);
@@ -282,6 +254,7 @@ void setup() {
   pinMode(ELEV_SLOW, OUTPUT);
   pinMode(ELEV_FAST, OUTPUT);
 
+  delay(2000);
   // Attach interrupts
   attachInterrupt(digitalPinToInterrupt(POS0_INT), IntSrv0, CHANGE);
   attachInterrupt(digitalPinToInterrupt(POS1_INT), IntSrv1, CHANGE);
@@ -378,12 +351,15 @@ void loop() {
     UpdateSpeed(i, positions[i], targets[i]);
   }
 
+  if (digitalRead(ELEV_INT) == LOW) {
+    Serial.println("ELEV_LOW");
+  }
   if (elev_triggered) {
     Serial.println("ET");
   }
   // Run state machine
   switch (curElevState) {
-    case ElevState::fast_auto :
+    case ElevState::fast_auto: {
       if (elev_triggered) {
         // If the sorter is ready anyways, carry on and wipe the flag.
         if(sorter_ready) {
@@ -396,10 +372,12 @@ void loop() {
         }
       }
       break;
+    }
 
-    case ElevState::slow_auto :{
+    case ElevState::slow_auto: {
       if (millis() - elev_ts > ELEV_DECEL) {
         SetElevatorSpeed(0);
+        curElevState = ElevState::stopped;
       }
       break;
     }
