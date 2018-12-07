@@ -40,8 +40,8 @@
 #define SRV3_PWM 8
 
 // Elevator control pins
-#define ELEV_SLOW 23
-#define ELEV_FAST 24
+#define ELEV_SLOW 47
+#define ELEV_FAST 48
 
 // Absolute position sensors on servos, camera servos first and then
 // sort servos.
@@ -49,6 +49,7 @@
 #define POS1_INT 2
 #define POS2_INT 3
 #define ELEV_INT 19
+#define ELEV_DEBOUNCE 1000
 
 #define POS0_VAL (PIND & (1<<PD3))
 #define POS1_VAL (PINE & (1<<PE4))
@@ -71,9 +72,10 @@ int8_t speeds [NUM_SERVOS] = {};
 int16_t targets [NUM_SERVOS] = {};
 uint16_t tmp_positions [NUM_SERVOS] = {};
 uint16_t positions [NUM_SERVOS] = {};
-volatile long time_deltas [NUM_SERVOS] = {};
-volatile long counters [NUM_SERVOS] = {};
+volatile long time_deltas [NUM_SERVOS] = {}; // Timers for motor angle counting
+volatile long counters [NUM_SERVOS] = {}; //
 volatile bool elev_triggered = false;
+volatile long elev_timer = 0; // Timer for elevator debouncing
 String input_string_buffer = String(""); // A String to hold incoming data
 volatile bool string_complete = false;  // Whether the string is complete
 
@@ -121,9 +123,10 @@ void IntSrv2() {
 }
 
 void IntElev() {
-    elev_triggered = true;
-    Serial.println("TRIG");
-  // }
+    if (millis() - elev_timer > ELEV_DEBOUNCE) {
+      elev_triggered = true;
+      elev_timer = millis();
+    }
 }
 
 // Return an always-positive modulo
@@ -351,9 +354,6 @@ void loop() {
     UpdateSpeed(i, positions[i], targets[i]);
   }
 
-  if (digitalRead(ELEV_INT) == LOW) {
-    Serial.println("ELEV_LOW");
-  }
   if (elev_triggered) {
     Serial.println("ET");
   }
