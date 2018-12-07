@@ -109,11 +109,13 @@ def extract_image_chain(image_queue, image_key):
 
 
 def save_image_chain(save_dir, key, image_chain, label):
-    dir_name = os.path.join("./", save_dir, label, key)
+    dir_name = os.path.join("./", save_dir, label)
     logger.info("Saving files to {}".format(dir_name))
-    pathlib.Path(dir_name).mkdir(parents=True)
+    pathlib.Path(dir_name).mkdir(parents=True, exist_ok=True)
     for idx, img in enumerate(image_chain):
-        scipy.misc.imsave(os.path.join(dir_name, "{}.jpg".format(idx)), img)
+        scipy.misc.imsave(
+            os.path.join(dir_name, "{}_{}.jpg".format(key, idx)), img
+        )
 
 
 def main(args, logger):
@@ -218,7 +220,7 @@ def parse_args():
     )
     optional = parser._action_groups.pop()
     required = parser.add_argument_group("required arguments")
-    required.add_argument("--save_dir")
+    required.add_argument("--save_dir", required=True)
     optional.add_argument("--master_address", default="tcp://localhost:5556")
     optional.add_argument("--sink_address", default="tcp://127.0.0.1:5558")
     optional.add_argument("--monitor_address", default="tcp://127.0.0.1:5559")
@@ -235,6 +237,7 @@ if __name__ == "__main__":
         raise ValueError("Invalid log level: {}".format(args.log_level))
     try:
         import coloredlogs
+
         coloredlogs.install(level=numeric_level)
     except ImportError:
         logging.basicConfig(level=numeric_level)

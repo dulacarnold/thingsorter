@@ -83,7 +83,7 @@ String input_string = String("");
 unsigned long msgs_ts[NUM_MSGS] = {}; // Message send timestamps
 unsigned long elev_ts = 0;
 
-volatile ElevState curElevState = ElevState::stopped;
+ElevState curElevState = ElevState::stopped;
 
 void serialEvent() {
   while (Serial.available()) {
@@ -212,19 +212,19 @@ void SetElevatorSpeed(uint8_t speed) {
     case 0: {
       digitalWrite(ELEV_SLOW, 1);
       digitalWrite(ELEV_FAST, 1);
-      curElevState = ElevState::stopped;
+      // curElevState = ElevState::stopped;
       break;
     }
     case 1: {
       digitalWrite(ELEV_SLOW, 0);
       digitalWrite(ELEV_FAST, 1);
-      curElevState = ElevState::slow;
+      // curElevState = ElevState::slow;
       break;
     }
     case 2: {
       digitalWrite(ELEV_SLOW, 1);
       digitalWrite(ELEV_FAST, 0);
-      curElevState = ElevState::fast;
+      // curElevState = ElevState::fast;
       break;
     }
   }
@@ -307,6 +307,7 @@ void loop() {
     // Serial.println(input_string);
     interrupts();
     switch(input_string[0]) {
+
       case 'G':
         if (input_string[1] == ' ') {
           angle = input_string.substring(1).toInt();
@@ -322,6 +323,7 @@ void loop() {
           Serial.println(String("G") + motor_id + String(" ") + angle);
         }
         break;
+
       case 'S':
         label = input_string.substring(1).toInt();
         label = max(0, min(360, label));
@@ -329,20 +331,31 @@ void loop() {
         Serial.print("S ");
         Serial.println(label);
         break;
+
       case 'E':
         speed = input_string.substring(1).toInt();
         speed = max(0, min(2, speed));
-        SetElevatorSpeed(speed);
+        switch (speed) {
+          case 2: curElevState = ElevState::fast; break;
+          case 1: curElevState = ElevState::slow; break;
+          case 0: curElevState = ElevState::stopped; break;
+        }
+        // SetElevatorSpeed(speed);
         Serial.print("E ");
         Serial.println(speed);
         break;
+
       // Automatic mode for elevator
-      case 'A':
-        SetElevatorSpeed(2);
+      case 'A': {
+        if (curElevState == ElevState::fast_auto) {
+          sorter_ready = true;
+        }
         curElevState = ElevState::fast_auto;
         Serial.println("A");
         break;
-     case 'R':
+      }
+
+      case 'R':
         sorter_ready = true;
         Serial.println("R");
         break;
@@ -360,13 +373,13 @@ void loop() {
   // Run state machine
   switch (curElevState) {
     case ElevState::fast_auto: {
+      SetElevatorSpeed(2);
       if (elev_triggered) {
         // If the sorter is ready anyways, carry on and wipe the flag.
         if(sorter_ready) {
           sorter_ready = false;
         // Otherwise slow down the line and prepare to stop.
         } else {
-          SetElevatorSpeed(1);
           curElevState = ElevState::slow_auto;
           elev_ts = millis();
         }
@@ -375,14 +388,21 @@ void loop() {
     }
 
     case ElevState::slow_auto: {
+      SetElevatorSpeed(1);
       if (millis() - elev_ts > ELEV_DECEL) {
-        SetElevatorSpeed(0);
         curElevState = ElevState::stopped;
       }
       break;
     }
 
-    default: break;
+    case ElevState::fast: SetElevatorSpeed(2); break;
+    case ElevState::slow: SetElevatorSpeed(1); break;
+    case ElevState::stopped: SetElevatorSpeed(0); break;
+
+    default:
+      SetElevatorSpeed(0);
+      curElevState = ElevState::stopped;
+      break;
   }
   elev_triggered = false;
 
@@ -404,6 +424,7 @@ void loop() {
       case ElevState::stopped: Serial.print("S"); break;
       case ElevState::slow_auto: Serial.print("LA"); break;
       case ElevState::fast_auto: Serial.print("FA"); break;
+      default: Serial.print("FE"); break;
     }
     Serial.println("");
     msgs_ts[MSG_STATUS] = millis();

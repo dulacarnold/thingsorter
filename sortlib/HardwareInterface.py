@@ -26,14 +26,19 @@ class HardwareInterface:
         self._msg_queue = Queue()
         self._logger = logging.getLogger(__name__)
         time.sleep(1)
-        self.sort_and_advance(0)
+        self._zero_motors()
+
+    def _zero_motors(self):
+        self._set_sort(0)
+        self._cur_pos = 0
+        for motor_id in self.MOTOR_OFFSETS:
+            self._set_pos(self.MOTOR_OFFSETS[motor_id][self._cur_pos], motor_id)
 
     def sort_and_advance(self, label):
         self._set_sort(label)
         self._cur_pos = (self._cur_pos + 1) % (self.NUM_POS)
         for motor_id in self.MOTOR_OFFSETS:
             self._set_pos(self.MOTOR_OFFSETS[motor_id][self._cur_pos], motor_id)
-        self.sorter_ready = True
 
     def _set_pos(self, angle, motor_id=None):
         if motor_id is None:
@@ -146,7 +151,7 @@ class HardwareInterface:
             # If flags have changed send updates
             if self.sorter_ready:
                 # Declare sorter ready
-                ser.write("R\r\n".encode())
-                # Start elevator (no effect if active)
+                # ser.write("R\r\n".encode())
+                # Start elevator (set sorter_ready if already active)
                 ser.write("A\r\n".encode())
-                self._logger.debug("Sent {}".format("R\r\n A\r\n".encode()))
+                self._logger.debug("Sent {}".format("A\r\n".encode()))

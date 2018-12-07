@@ -9,15 +9,7 @@ import logging
 from collections import deque
 from IPython import embed
 
-from sort_lib import HardwareInterface
-
-context = zmq.Context()
-socket = context.socket(zmq.PUB)
-socket.bind("tcp://*:5556")
-
-monitor_socket = context.socket(zmq.PULL)
-monitor_socket.bind("tcp://*:5559")
-time.sleep(1)
+from sortlib.HardwareInterface import HardwareInterface
 
 QUEUE_LEN = 3
 
@@ -26,6 +18,17 @@ def main(args, logger):
     active_ts = deque()
     hwi = HardwareInterface()
     hwi.start()
+
+    context = zmq.Context()
+    master = context.socket(zmq.PUB)
+    master.bind("tcp://*:5556")
+    master.setsockopt(zmq.LINGER, 0)
+
+    monitor = context.socket(zmq.PULL)
+    monitor.bind("tcp://*:5559")
+    monitor.setsockopt(zmq.LINGER, 0)
+
+    time.sleep(1)
     while True:
         time.sleep(0.1)
         # Use a string to avoid any chance of FPE
@@ -34,13 +37,15 @@ def main(args, logger):
         msg = json.dumps(
             {"timestamp": "{}".format(ts), "control": "RUN", "label": "good"}
         )
-        socket.send_string(msg)
+        logger.info
+        master.send_string(msg)
 
         logger.info("Master message sent: {}.".format(msg))
         # If we should have a finished image acquisition,
         # check for the signal from the image processor
         if len(active_ts) >= QUEUE_LEN:
-            mon_msg = monitor_socket.recv_json()
+            logger.info("Waiting for monitor message...")
+            mon_msg = monitor.recv_json()
             logger.info("Monitor message received: {}".format(mon_msg))
             rcvd_ts = mon_msg["timestamp"]
             label = mon_msg["label"]
@@ -73,17 +78,19 @@ def main(args, logger):
             logging.info(
                 "Advancing empty element, queue len: {}".format(len(active_ts))
             )
-            label = "UNK"
+            label = ""
         # Command the sorting mechanism with the given class and advance the line
         logging.info("Setting sort to {} and advancing line.".format(label))
         hwi.sort_and_advance(label)
+        logger.info("Waiting on servo arrival...")
         while not hwi.servos_arrived:
             time.sleep(0.05)
         # Activate elevator
-        logging.info("Activating elevator.")
-        hwi.sorter_ready = True
+        logger.info("Activating and waiting for elevator.")
         while not hwi.elevator_arrived:
             time.sleep(0.05)
+        hwi.sorter_ready = True
+        logger.info("Elevator arrived.")
         time.sleep(0.25)  # Make sure everything is stabilized
 
 
@@ -93,7 +100,6 @@ def parse_args():
         description="Grab camera images and forward to sink."
     )
     optional = parser._action_groups.pop()
-    required = parser.add_argument_group("required arguments")
     optional.add_argument("--master_address", default="tcp://localhost:5556")
     optional.add_argument("--sink_address", default="tcp://localhost:5558")
     optional.add_argument("--log_level", default="DEBUG")

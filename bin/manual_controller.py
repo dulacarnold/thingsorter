@@ -12,7 +12,7 @@ def main(args, logger):
     while True:
         label = input("--> ")
         print(label)
-        time.sleep(1)
+        # time.sleep(1)
         logger.info("Setting sort to {} and advancing line.".format(label))
         hwi.sort_and_advance(label)
         logger.info("Waiting on servo arrival...")
@@ -22,8 +22,8 @@ def main(args, logger):
         # Activate elevator
         logger.info("Activating elevator and waiting on arrival.")
         hwi.sorter_ready = True
-        # while not hwi.elevator_arrived:
-        #     time.sleep(0.05)
+        while not hwi.elevator_arrived:
+            time.sleep(0.05)
         logger.info("Elevator arrived.")
         logger.info(hwi.motor_positions)
         time.sleep(0.25)  # Make sure everything is stabilized
