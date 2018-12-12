@@ -21,3 +21,16 @@ Drive Motor:
 Feedback Int: 18
 Forward:
 Backward:
+
+
+Problèmes:
+Double chataigne
+Pas de chataigne
+non-avancement de chataigne
+puissance insufisante sur moteur 12v
+
+Solutions:
+Reglage distance chataigne t+1
+Angle sur 2 premiers tourneurs avec coincage de temps en temps
+Arret bizarre de toute la machine (elevateur arreté mais sans envoi signal)
+
