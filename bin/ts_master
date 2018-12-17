@@ -8,6 +8,7 @@ import json
 import logging
 from collections import deque
 from IPython import embed
+import configparser
 
 from sortlib.HardwareInterface import HardwareInterface
 
@@ -16,7 +17,9 @@ QUEUE_LEN = 3
 
 def main(args, logger):
     active_ts = deque()
-    hwi = HardwareInterface()
+    hwi = HardwareInterface(
+        port=args.serial_port, motor_offsets=args.motor_offsets
+    )
     hwi.start()
 
     context = zmq.Context()
@@ -95,16 +98,29 @@ def main(args, logger):
 
 
 def parse_args():
-
     parser = argparse.ArgumentParser(
         description="Grab camera images and forward to sink."
     )
-    optional = parser._action_groups.pop()
-    optional.add_argument("--master_address", default="tcp://localhost:5556")
-    optional.add_argument("--sink_address", default="tcp://localhost:5558")
-    optional.add_argument("--log_level", default="DEBUG")
-    parser._action_groups.append(optional)
-    return parser.parse_args()
+
+    parser.add_argument("-c", "--config_file", default="/etc/thingsorter.conf")
+    parser.add_argument("--log_level", default="DEBUG")
+    args = parser.parse_args()
+
+    config = configparser.ConfigParser()
+    config.read(args.config_file)
+    args.master_address = config["addresses"]["master_address"]
+    args.monitor_address = config["addresses"]["monitor_address"]
+    args.motor_offsets = dict(
+        (
+            (idx, tuple(map(int, line.split(","))))
+            for idx, line in enumerate(
+                config["calibration"]["motor_offsets"].split("\n")
+            )
+        )
+    )
+    args.serial_port = config["addresses"]["serial_port"]
+    args.baudrate = config["addresses"]["baudrate"]
+    return args
 
 
 if __name__ == "__main__":
@@ -119,6 +135,5 @@ if __name__ == "__main__":
         coloredlogs.install(level=numeric_level)
     except ImportError:
         logging.basicConfig(level=numeric_level)
-    # logger.setLevel(numeric_level)
     logger.info("Starting main...")
     main(args, logger)

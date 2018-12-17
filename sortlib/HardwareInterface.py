@@ -4,6 +4,7 @@ from multiprocessing import Process, Value, Array, Queue
 from queue import Empty
 from ctypes import c_bool
 import time
+import sys
 
 
 class HardwareInterface:
@@ -15,7 +16,9 @@ class HardwareInterface:
     }
     NUM_POS = 4
 
-    def __init__(self, port="/dev/ttyACM0", baudrate="38400"):
+    def __init__(
+        self, port="/dev/ttyACM0", baudrate="38400", motor_offsets=None
+    ):
         self.port = port
         self.baudrate = baudrate
         self._cur_pos = 0
@@ -25,6 +28,8 @@ class HardwareInterface:
         self._motor_positions = Array("i", [0] * len(self.MOTOR_OFFSETS))
         self._msg_queue = Queue()
         self._logger = logging.getLogger(__name__)
+        if motor_offsets is not None:
+            self.MOTOR_OFFSETS = motor_offsets
         time.sleep(1)
         self._zero_motors()
 

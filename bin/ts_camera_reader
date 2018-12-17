@@ -100,16 +100,10 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Grab camera images and forward to sink."
     )
-    optional = parser._action_groups.pop()
     required = parser.add_argument_group("required arguments")
     required.add_argument("--camera_number", type=int, required=True)
-    required.add_argument("-c", "--config_file", default="/home/gabriel/Src/TechnoTrieuse/thingsorter.ini")
-    # optional.add_argument("--master_address", default="tcp://localhost:5556")
-    # optional.add_argument("--sink_address", default="tcp://localhost:5558")
-    optional.add_argument("--log_level", default="DEBUG")
-    # optional.add_argument("--width", default=1280)
-    # optional.add_argument("--height", default=720)
-    parser._action_groups.append(optional)
+    parser.add_argument("-c", "--config_file", default="/etc/thingsorter.conf")
+    parser.add_argument("--log_level", default="DEBUG")
 
     args = parser.parse_args()
     config = configparser.ConfigParser()

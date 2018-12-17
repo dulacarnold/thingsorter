@@ -12,6 +12,7 @@ import numpy as np
 import scipy.misc
 import pathlib
 from collections import defaultdict
+import configparser
 
 from IPython import embed
 
@@ -173,60 +174,26 @@ def main(args, logger):
             save_image_chain(args.save_dir, save_key, image_chain, label)
             monitor.send_json({"timestamp": save_key, "label": "SAVE"})
 
-    # while True:
-
-    #     # Store received images in the image queue
-    #     timestamp, video_device, img = recv_array(sink)
-    #     image_queue[timestamp][video_device] = img
-    #     logger.info("Received image for ts {}".format(timestamp))
-    #     # We can do an infinite loop as long as the master freq < timeout
-    #     while True:
-    #         try:
-    #             m_msg = master.recv_json()
-    #             logger.info(
-    #                 "Received master message for ts={}".format(
-    #                     m_msg["timestamp"]
-    #                 )
-    #             )
-    #             label_queue[m_msg["timestamp"]] = m_msg["label"]
-    #             if m_msg["control"] == "QUIT":
-    #                 do_quit = False
-    #         except zmq.Again:
-    #             logger.debug("No messages from master.")
-    #             # time.sleep(0.1)
-    #             break
-    #     if do_quit:
-    #         break
-
-    #     # Get the oldest key with valid chain and save it to disk
-    #     save_key = get_oldest_unprocessed(image_queue)
-
-    #     logging.info("Saving images for ts={}".format(save_key))
-    #     if save_key is not None:
-    #         image_chain = extract_image_chain(image_queue, save_key)
-    #         try:
-    #             label = label_queue[save_key]
-    #         except KeyError:
-    #             label = "UNK"
-    #         save_image_chain(args.save_dir, save_key, image_chain, label)
-
-    #     # Tell the monitor we've processed this timestamp
-    #     monitor.send_json({"timestamp": save_key})
-
 
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Grab camera images and forward to sink."
     )
-    optional = parser._action_groups.pop()
     required = parser.add_argument_group("required arguments")
+    parser.add_argument("-c", "--config_file", default="/etc/thingsorter.conf")
     required.add_argument("--save_dir", required=True)
-    optional.add_argument("--master_address", default="tcp://localhost:5556")
-    optional.add_argument("--sink_address", default="tcp://127.0.0.1:5558")
-    optional.add_argument("--monitor_address", default="tcp://127.0.0.1:5559")
-    optional.add_argument("--log_level", default="DEBUG")
-    parser._action_groups.append(optional)
-    return parser.parse_args()
+    # optional.add_argument("--master_address", default="tcp://localhost:5556")
+    # optional.add_argument("--sink_address", default="tcp://127.0.0.1:5558")
+    # optional.add_argument("--monitor_address", default="tcp://127.0.0.1:5559")
+    parser.add_argument("--log_level", default="DEBUG")
+    args = parser.parse_args()
+
+    config = configparser.ConfigParser()
+    config.read(args.config_file)
+    args.master_address = config["addresses"]["master_address"]
+    args.sink_address = config["addresses"]["sink_address"]
+    args.monitor_address = config["addresses"]["monitor_address"]
+    return args
 
 
 if __name__ == "__main__":
