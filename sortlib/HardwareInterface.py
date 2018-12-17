@@ -4,15 +4,14 @@ from multiprocessing import Process, Value, Array, Queue
 from queue import Empty
 from ctypes import c_bool
 import time
-import sys
 
 
 class HardwareInterface:
 
     MOTOR_OFFSETS = {
-        0: (0, 90, 180, 270),
-        1: (0, 90, 180, 270),
-        2: (0, 90, 180, 270),
+        0: (315, 50, 135, 225),
+        1: (0, 88, 178, 266),
+        2: (345, 85, 165, 255),
     }
     NUM_POS = 4
 
@@ -40,6 +39,7 @@ class HardwareInterface:
             self._set_pos(self.MOTOR_OFFSETS[motor_id][self._cur_pos], motor_id)
 
     def sort_and_advance(self, label):
+        """ Set the sort direction and advance blades. """
         self._set_sort(label)
         self._cur_pos = (self._cur_pos + 1) % (self.NUM_POS)
         for motor_id in self.MOTOR_OFFSETS:

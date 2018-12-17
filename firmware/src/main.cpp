@@ -22,8 +22,9 @@
 #define SPD_MAX 90
 #define SPD_GAIN 0.03F
 
-#define ELEV_DECEL 1000 // Time elevator spends on slow before stop
-
+#define ELEV_DECEL 200 // Time elevator spends on slow before stop
+#define ELEV_TRIG_OFFSET 150
+ // Offset between actual trigger interrupt and action on signal
 #define POSE_OFFSET 30L // Minimum pose offset
 #define POS_TO_ANGLE 0.342 // = 360/1051
 
@@ -40,8 +41,8 @@
 #define SRV3_PWM 8
 
 // Elevator control pins
-#define ELEV_SLOW 47
-#define ELEV_FAST 48
+#define ELEV_SLOW 48
+#define ELEV_FAST 47
 
 // Absolute position sensors on servos, camera servos first and then
 // sort servos.
@@ -49,12 +50,12 @@
 #define POS1_INT 2
 #define POS2_INT 3
 #define ELEV_INT 19
-#define ELEV_DEBOUNCE 1000
+#define ELEV_DEBOUNCE 100
 
 #define POS0_VAL (PIND & (1<<PD3))
 #define POS1_VAL (PINE & (1<<PE4))
 #define POS2_VAL (PINE & (1<<PE5))
-// #define POS3_VAL (PIND & (1<<PD2))
+#define ELEV_VAL (PIND & (1<<PD2))
 #define NUM_AVGS 5
 
 // First NUM_CAM_SERVOS are camera servos, and the following
@@ -68,16 +69,23 @@ bool did_move = true; // Whether a move was requested
 bool stopped = true; // Whether all motors are stopped
 uint8_t num_avgs = 0;
 
-int8_t speeds [NUM_SERVOS] = {};
+// Motor control variables
+int8_t speeds [NUM_SERVOS] = {}; // Current speeds of rotor motors
 int16_t targets [NUM_SERVOS] = {};
-uint16_t tmp_positions [NUM_SERVOS] = {};
-uint16_t positions [NUM_SERVOS] = {};
-volatile long time_deltas [NUM_SERVOS] = {}; // Timers for motor angle counting
-volatile long counters [NUM_SERVOS] = {}; //
-volatile bool elev_triggered = false;
-volatile long elev_timer = 0; // Timer for elevator debouncing
-String input_string_buffer = String(""); // A String to hold incoming data
+volatile long time_deltas [NUM_SERVOS] = {}; // Volatile storage of time delta
+volatile long counters [NUM_SERVOS] = {}; // Starting timestamps for PWM counters
+uint16_t tmp_positions [NUM_SERVOS] = {}; // Local variable for pre-average positions
+uint16_t positions [NUM_SERVOS] = {}; // Averaged positions of variables
+// Elevator trigger variables
+volatile bool elev_down_vol = false;
+volatile bool elev_triggered_vol = false;
+volatile long elev_triggered_ts_vol = 0; // Timestamp for stop delay + debounce
+volatile long elev_debounce_ts_vol = 0;
+bool elev_triggered = false;
+// long elev_triggered_ts = 0;
+// Input string management
 volatile bool string_complete = false;  // Whether the string is complete
+String input_string_buffer = String(""); // A String to hold incoming data
 
 String input_string = String("");
 unsigned long msgs_ts[NUM_MSGS] = {}; // Message send timestamps
@@ -123,11 +131,18 @@ void IntSrv2() {
 }
 
 void IntElev() {
-    if (millis() - elev_timer > ELEV_DEBOUNCE) {
-      elev_triggered = true;
-      elev_timer = millis();
+    if(ELEV_VAL == 0) {
+      elev_debounce_ts_vol = micros();
+      elev_down_vol = true;
+    } else {
+      if(elev_down_vol && micros() - elev_debounce_ts_vol > ELEV_DEBOUNCE) {
+        elev_triggered_vol = true;
+        elev_down_vol = false;
+        elev_triggered_ts_vol = millis();
+      }
     }
 }
+
 
 // Return an always-positive modulo
 uint16_t mod(int16_t x, int16_t m) {
@@ -210,20 +225,20 @@ void SetPos(uint16_t angle, uint8_t motor_id) {
 void SetElevatorSpeed(uint8_t speed) {
   switch(speed) {
     case 0: {
-      digitalWrite(ELEV_SLOW, 1);
-      digitalWrite(ELEV_FAST, 1);
+      digitalWrite(ELEV_SLOW, 0);
+      digitalWrite(ELEV_FAST, 0);
       // curElevState = ElevState::stopped;
       break;
     }
     case 1: {
-      digitalWrite(ELEV_SLOW, 0);
-      digitalWrite(ELEV_FAST, 1);
+      digitalWrite(ELEV_SLOW, 1);
+      digitalWrite(ELEV_FAST, 0);
       // curElevState = ElevState::slow;
       break;
     }
     case 2: {
-      digitalWrite(ELEV_SLOW, 1);
-      digitalWrite(ELEV_FAST, 0);
+      digitalWrite(ELEV_SLOW, 0);
+      digitalWrite(ELEV_FAST, 1);
       // curElevState = ElevState::fast;
       break;
     }
@@ -232,16 +247,16 @@ void SetElevatorSpeed(uint8_t speed) {
 
 
 void setup() {
-  Serial.begin(38400);
-
-  // This is for serial control commands
-  input_string.reserve(4);
-
   // Attach the servos:
   servos[0].attach(SRV0_PWM, SRV_POS_MIN, SRV_POS_MAX);
   servos[1].attach(SRV1_PWM, SRV_POS_MIN, SRV_POS_MAX);
   servos[2].attach(SRV2_PWM, SRV_POS_MIN, SRV_POS_MAX);
   servos[3].attach(SRV3_PWM, SRV_ANG_MIN, SRV_ANG_MAX);
+
+  Serial.begin(38400);
+
+  // This is for serial control commands
+  input_string.reserve(50);
 
   // Interrupt pins for servo positioning
   pinMode(POS0_INT, INPUT);
@@ -252,8 +267,8 @@ void setup() {
   pinMode(ELEV_INT, INPUT_PULLUP);
 
   // Outputs for elevator control
-  digitalWrite(ELEV_SLOW, 1);
-  digitalWrite(ELEV_FAST, 1);
+  digitalWrite(ELEV_SLOW, 0);
+  digitalWrite(ELEV_FAST, 0);
   pinMode(ELEV_SLOW, OUTPUT);
   pinMode(ELEV_FAST, OUTPUT);
 
@@ -262,7 +277,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(POS0_INT), IntSrv0, CHANGE);
   attachInterrupt(digitalPinToInterrupt(POS1_INT), IntSrv1, CHANGE);
   attachInterrupt(digitalPinToInterrupt(POS2_INT), IntSrv2, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(ELEV_INT), IntElev, FALLING);
+  attachInterrupt(digitalPinToInterrupt(ELEV_INT), IntElev, CHANGE);
 
   // Initialize servo positions
   SetSpeed(0, 0, 0);
@@ -367,9 +382,11 @@ void loop() {
     UpdateSpeed(i, positions[i], targets[i]);
   }
 
-  if (elev_triggered) {
-    Serial.println("ET");
+  if (elev_triggered_vol && (millis() - elev_triggered_ts_vol) > ELEV_TRIG_OFFSET) {
+    elev_triggered = true;
+    elev_triggered_vol = false;
   }
+
   // Run state machine
   switch (curElevState) {
     case ElevState::fast_auto: {
@@ -404,7 +421,10 @@ void loop() {
       curElevState = ElevState::stopped;
       break;
   }
-  elev_triggered = false;
+  if (elev_triggered) {
+    Serial.println("ET");
+    elev_triggered = false;
+  }
 
   // Occasional status messages
   if (millis() - msgs_ts[MSG_STATUS] > MSG_STAT_FREQ) {
