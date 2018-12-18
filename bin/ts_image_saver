@@ -14,7 +14,7 @@ import pathlib
 from collections import defaultdict
 import configparser
 
-from IPython import embed
+#from IPython import embed
 
 
 logging.basicConfig()

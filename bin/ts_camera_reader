@@ -10,7 +10,7 @@ import os
 import time
 import configparser
 
-from IPython import embed
+#from IPython import embed
 
 
 def get_sig_handler(cap, master, sink, context):
