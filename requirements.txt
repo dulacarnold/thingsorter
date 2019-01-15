@@ -37,7 +37,6 @@ pbr==5.1.1
 pexpect==4.6.0
 pickleshare==0.7.5
 Pillow==5.2.0
-platformio==3.6.2
 pluggy==0.7.1
 pluginlib==0.6.1
 prometheus-client==0.3.1
