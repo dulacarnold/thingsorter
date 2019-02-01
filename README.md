@@ -34,3 +34,6 @@ Reglage distance chataigne t+1
 Angle sur 2 premiers tourneurs avec coincage de temps en temps
 Arret bizarre de toute la machine (elevateur arreté mais sans envoi signal)
 
+Attention is all you need
+Matching Networks for One Shot Learning
+Cucumber sorting guy
