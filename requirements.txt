@@ -58,7 +58,7 @@ stevedore==1.30.0
 terminado==0.8.1
 testpath==0.3.1
 traitlets==4.3.2
-urllib3==1.24.1
+urllib3==1.24.2
 virtualenv-clone==0.4.0
 virtualenvwrapper==4.8.2
 wcwidth==0.1.7
