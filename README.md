@@ -23,17 +23,7 @@ Forward:
 Backward:
 
 
-Problèmes:
-Double chataigne
-Pas de chataigne
-non-avancement de chataigne
-puissance insufisante sur moteur 12v
+Current Issues:
+Singulation
+Empty detection
 
-Solutions:
-Reglage distance chataigne t+1
-Angle sur 2 premiers tourneurs avec coincage de temps en temps
-Arret bizarre de toute la machine (elevateur arreté mais sans envoi signal)
-
-Attention is all you need
-Matching Networks for One Shot Learning
-Cucumber sorting guy
