@@ -42,7 +42,7 @@ pluginlib==0.6.1
 prometheus-client==0.3.1
 prompt-toolkit==2.0.4
 ptyprocess==0.6.0
-py==1.6.0
+py==1.10.0
 Pygments==2.2.0
 pyserial==3.4
 pytest==3.8.1
